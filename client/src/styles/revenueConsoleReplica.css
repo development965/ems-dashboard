@@ -1,0 +1,281 @@
+/* Exact visual replica of the standalone Techmaax Revenue Console dashboard
+   (Consoildated_Revenue_File/techmaax-revenue-dashboard.html) — same fonts, same
+   palette, same card/KPI/table/matrix styling. Scoped under .rc-replica so none of
+   this leaks into the rest of the app's own (maroon) theme. */
+
+.rc-replica {
+  --rc-ink: #1b2430;
+  --rc-ink-soft: #3b4656;
+  --rc-paper: #f6f5f1;
+  --rc-card: #ffffff;
+  --rc-amber: #e8a00c;
+  --rc-amber-deep: #b97d06;
+  --rc-teal: #2a9d8f;
+  --rc-plum: #7d5ba6;
+  --rc-rust: #c75146;
+  --rc-steel: #5e7ce2;
+  --rc-line: #e4e1d8;
+  --rc-muted: #8a8f98;
+  --rc-good: #1e7f4f;
+  --rc-shadow: 0 1px 2px rgba(27, 36, 48, 0.06), 0 6px 18px rgba(27, 36, 48, 0.05);
+
+  background: var(--rc-paper);
+  color: var(--rc-ink);
+  font-family: "Archivo", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  border-radius: 16px;
+  padding: 24px;
+}
+/* Galaxy Fold's cover screen (~280px) and other very narrow phones — trims the card's own
+   padding so KPI tiles and filters still have room to breathe instead of hugging the edge. */
+@media (max-width: 480px) {
+  .rc-replica {
+    padding: 12px;
+    border-radius: 12px;
+  }
+  .rc-replica .rc-card-b {
+    padding: 12px;
+  }
+}
+
+.rc-replica .rc-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-replica .rc-header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.rc-replica .rc-header h2 {
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 0.2px;
+  font-stretch: 110%;
+  color: var(--rc-ink);
+}
+.rc-replica .rc-header .rc-sub {
+  color: var(--rc-ink-soft);
+  font-size: 13px;
+}
+.rc-replica .rc-header .rc-badge {
+  margin-left: auto;
+  background: var(--rc-amber);
+  color: var(--rc-ink);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 99px;
+}
+
+.rc-replica section {
+  margin-bottom: 26px;
+}
+.rc-replica .rc-card {
+  background: var(--rc-card);
+  border: 1px solid var(--rc-line);
+  border-radius: 12px;
+  box-shadow: var(--rc-shadow);
+}
+.rc-replica .rc-card-h {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rc-line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rc-replica .rc-card-h h3 {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--rc-ink-soft);
+}
+.rc-replica .rc-card-b {
+  padding: 18px;
+}
+
+.rc-replica .rc-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+.rc-replica .rc-kpi {
+  background: var(--rc-card);
+  border: 1px solid var(--rc-line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--rc-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.rc-replica .rc-kpi::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--rc-amber);
+}
+.rc-replica .rc-kpi.rc-k2::before {
+  background: var(--rc-teal);
+}
+.rc-replica .rc-kpi.rc-k3::before {
+  background: var(--rc-rust);
+}
+.rc-replica .rc-kpi.rc-k4::before {
+  background: var(--rc-steel);
+}
+.rc-replica .rc-kpi .rc-lab {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--rc-muted);
+  font-weight: 700;
+}
+.rc-replica .rc-kpi .rc-val {
+  font-size: 26px;
+  font-weight: 750;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.rc-replica .rc-kpi .rc-note {
+  font-size: 12px;
+  color: var(--rc-muted);
+  margin-top: 2px;
+}
+
+.rc-replica .rc-grid2 {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 18px;
+}
+.rc-replica .rc-grid2b {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 900px) {
+  .rc-replica .rc-grid2,
+  .rc-replica .rc-grid2b {
+    grid-template-columns: 1fr;
+  }
+}
+.rc-replica .rc-chartbox {
+  position: relative;
+  height: 320px;
+}
+.rc-replica .rc-chartbox.rc-tall {
+  height: 360px;
+}
+
+.rc-replica table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.rc-replica th,
+.rc-replica td {
+  padding: 9px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--rc-line);
+  font-variant-numeric: tabular-nums;
+}
+.rc-replica th:first-child,
+.rc-replica td:first-child {
+  text-align: left;
+}
+.rc-replica thead th {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--rc-muted);
+  background: #fbfaf7;
+  position: sticky;
+  top: 0;
+}
+.rc-replica tbody tr:hover {
+  background: #fffbef;
+}
+.rc-replica td.rc-heat {
+  color: var(--rc-ink);
+  font-weight: 600;
+}
+.rc-replica tfoot td {
+  font-weight: 750;
+  background: #f2f0e9;
+  border-top: 2px solid var(--rc-ink);
+}
+.rc-replica .rc-rowhead {
+  font-weight: 700;
+}
+.rc-replica .rc-tblwrap {
+  overflow: auto;
+  max-height: 480px;
+}
+.rc-replica .rc-zero {
+  color: #c6c2b6;
+}
+.rc-replica .rc-hint {
+  color: var(--rc-muted);
+  font-size: 12.5px;
+}
+.rc-replica .rc-filters {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.rc-replica .rc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rc-replica .rc-field label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--rc-muted);
+  font-weight: 700;
+}
+.rc-replica .rc-field select {
+  padding: 9px 12px;
+  border: 1px solid var(--rc-line);
+  border-radius: 9px;
+  font: inherit;
+  background: #fff;
+  min-width: 170px;
+  cursor: pointer;
+  color: var(--rc-ink);
+}
+.rc-replica .rc-field select:focus {
+  outline: 2px solid var(--rc-amber);
+}
+.rc-replica .rc-btn {
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--rc-line);
+  background: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--rc-ink);
+}
+.rc-replica .rc-btn:hover {
+  border-color: var(--rc-ink-soft);
+}
+
+.rc-replica .rc-pill {
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  background: #eef2ff;
+  color: var(--rc-steel);
+  font-weight: 700;
+}

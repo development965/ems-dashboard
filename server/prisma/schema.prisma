@@ -1,0 +1,679 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  BRANCH_ADMIN
+  ACCOUNTANT
+}
+
+enum CourseMode {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum StudentStatus {
+  ENROLLED
+  COMPLETED
+  DROPPED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  RAZORPAY_LINK
+  OTHER
+}
+
+enum PaymentLinkStatus {
+  CREATED
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+enum CertificationStatus {
+  NOT_ISSUED
+  ISSUED
+}
+
+enum PlacementStatus {
+  NOT_PLACED
+  IN_PROGRESS
+  PLACED
+}
+
+enum ReminderChannel {
+  WHATSAPP
+  CALL
+  SMS
+  EMAIL
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  TRIAL_SCHEDULED
+  CONVERTED
+  LOST
+}
+
+enum LeadSource {
+  WALK_IN
+  PHONE
+  WEBSITE
+  REFERRAL
+  SOCIAL_MEDIA
+  OTHER
+}
+
+enum PettyCashType {
+  TOP_UP
+  EXPENSE
+}
+
+enum PettyCashRequisitionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FULFILLED
+}
+
+/// Purely an organizational grouping of branches for dashboard reporting — unrelated to
+/// RBAC scoping, which stays company-vs-own-branch as it already was.
+enum Zone {
+  ZONE_1
+  ZONE_2
+  ZONE_3
+}
+
+enum RevenueShareStatus {
+  PENDING
+  SETTLED
+}
+
+/// A second, independent check on a transfer that's already SETTLED — money moved once
+/// settled; this just records whether a super admin/accountant has since looked at it and
+/// confirmed it's correct, or flagged it as wrong.
+enum TransferReviewStatus {
+  UNREVIEWED
+  ACCEPTED
+  DISPUTED
+}
+
+/// A licensed organization using the system. Techmaax is the first row today;
+/// this layer exists so additional client companies can be onboarded later
+/// without changing the data model.
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches              Branch[]
+  users                 User[]
+  courses               Course[]
+  batches               Batch[]
+  students              Student[]
+  payments              Payment[]
+  paymentLinks          PaymentLink[]
+  discounts             Discount[]
+  auditLogs             AuditLog[]
+  feeReminders          FeeReminder[]
+  branchTargets         BranchTarget[]
+  leads                 Lead[]
+  pettyCashEntries      PettyCashEntry[]
+  pettyCashRequisitions PettyCashRequisition[]
+  revenueShares         PaymentRevenueShare[]
+
+  @@map("companies")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  zone      Zone?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company                Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users                  User[]
+  batches                Batch[]
+  students               Student[]
+  payments               Payment[]
+  paymentLinks           PaymentLink[]
+  discounts              Discount[]
+  auditLogs              AuditLog[]
+  feeReminders           FeeReminder[]
+  branchTargets          BranchTarget[]
+  leads                  Lead[]
+  pettyCashEntries       PettyCashEntry[]
+  pettyCashRequisitions  PettyCashRequisition[]
+  revenueSharesToPay     PaymentRevenueShare[]  @relation("RevenueShareFromBranch")
+  revenueSharesToReceive PaymentRevenueShare[]  @relation("RevenueShareToBranch")
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("branches")
+}
+
+/// branchId is null for SUPER_ADMIN (company-wide access).
+/// BRANCH_ADMIN and ACCOUNTANT must always have a branchId — enforced in the
+/// application layer since it depends on role.
+model User {
+  id           String    @id @default(cuid())
+  companyId    String
+  branchId     String?
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company                        Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch                         Branch?                @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  refreshTokens                  RefreshToken[]
+  createdStudents                Student[]
+  recordedPayments               Payment[]
+  createdPaymentLinks            PaymentLink[]
+  approvedDiscounts              Discount[]
+  auditLogs                      AuditLog[]
+  sentFeeReminders               FeeReminder[]
+  setBranchTargets               BranchTarget[]
+  createdLeads                   Lead[]
+  leadActivities                 LeadActivity[]
+  recordedPettyCashEntries       PettyCashEntry[]
+  reviewedPettyCashEntries       PettyCashEntry[]       @relation("PettyCashEntryReviewedBy")
+  requestedPettyCashRequisitions PettyCashRequisition[] @relation("PettyCashRequisitionRequestedBy")
+  decidedPettyCashRequisitions   PettyCashRequisition[] @relation("PettyCashRequisitionDecisionBy")
+  fulfilledPettyCashRequisitions PettyCashRequisition[] @relation("PettyCashRequisitionFulfilledBy")
+  recordedRevenueShares          PaymentRevenueShare[]  @relation("RevenueShareRecordedBy")
+  settledRevenueShares           PaymentRevenueShare[]  @relation("RevenueShareSettledBy")
+  reviewedRevenueShares          PaymentRevenueShare[]  @relation("RevenueShareReviewedBy")
+
+  @@index([companyId])
+  @@index([branchId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Company-wide course catalog. Kept centrally managed (super admin) so the
+/// same course isn't duplicated/drifting across branches; branches schedule
+/// their own Batches against it.
+model Course {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  code         String
+  description  String?  @db.Text
+  durationText String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  feeStructures CourseFeeStructure[]
+  batches       Batch[]
+  students      Student[]
+  leads         Lead[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("courses")
+}
+
+/// A course can have more than one fee row (e.g. Online vs Offline pricing).
+/// Student.totalFee is a snapshot taken at enrollment time, so changing a
+/// fee structure later never rewrites already-enrolled students' fees.
+model CourseFeeStructure {
+  id        String     @id @default(cuid())
+  courseId  String
+  label     String
+  mode      CourseMode
+  amount    Decimal    @db.Decimal(10, 2)
+  currency  String     @default("INR")
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@map("course_fee_structures")
+}
+
+/// A specific run of a Course at a specific Branch — this is what carries
+/// the batch timings the branch actually teaches.
+model Batch {
+  id        String     @id @default(cuid())
+  companyId String
+  branchId  String
+  courseId  String
+  name      String
+  mode      CourseMode
+  schedule  String
+  startDate DateTime?
+  endDate   DateTime?
+  capacity  Int?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch   Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  course   Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@unique([branchId, courseId, name])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([courseId])
+  @@map("batches")
+}
+
+model Student {
+  id          String        @id @default(cuid())
+  companyId   String
+  branchId    String
+  name        String
+  phone       String
+  email       String?
+  location    String
+  courseId    String
+  batchId     String?
+  mode        CourseMode
+  totalFee    Decimal       @db.Decimal(10, 2)
+  status      StudentStatus @default(ENROLLED)
+  notes       String?       @db.Text
+  photoUrl    String?
+  idProofUrl  String?
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Certification — set once a student completes the course and the certificate is issued.
+  certificationStatus CertificationStatus @default(NOT_ISSUED)
+  certificateNo       String?
+  certificateIssuedAt DateTime?
+
+  // Placement — tracked separately from certification since not every certified student
+  // wants/needs placement assistance, and placement can happen before certification.
+  placementStatus     PlacementStatus @default(NOT_PLACED)
+  placementCompany    String?
+  placementRole       String?
+  placementPackageLPA Decimal?        @db.Decimal(6, 2)
+  placedAt            DateTime?
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  course       Course        @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  batch        Batch?        @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdBy    User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  paymentLinks PaymentLink[]
+  discounts    Discount[]
+  feeReminders FeeReminder[]
+  sourceLead   Lead?
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([courseId])
+  @@index([batchId])
+  @@map("students")
+}
+
+/// An auditable reduction against a student's fee — a discount never rewrites
+/// Student.totalFee directly, so there's always a record of the original
+/// price, who approved the reduction, and why. Restricted to super admins and
+/// accountants; branch admins can't grant discounts.
+model Discount {
+  id           String   @id @default(cuid())
+  companyId    String
+  branchId     String
+  studentId    String
+  amount       Decimal  @db.Decimal(10, 2)
+  reason       String?
+  approvedById String
+  createdAt    DateTime @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch     Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  approvedBy User    @relation(fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([studentId])
+  @@map("discounts")
+}
+
+/// The actual revenue ledger — every rupee collected, regardless of channel.
+/// A RAZORPAY_LINK payment is created automatically by the webhook handler;
+/// everything else (cash, bank transfer) is recorded manually by staff.
+model Payment {
+  id            String        @id @default(cuid())
+  companyId     String
+  branchId      String
+  studentId     String
+  amount        Decimal       @db.Decimal(10, 2)
+  method        PaymentMethod
+  paymentLinkId String?       @unique
+  paidAt        DateTime      @default(now())
+  recordedById  String
+  notes         String?
+  createdAt     DateTime      @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id], onDelete: SetNull)
+  recordedBy  User         @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+
+  revenueShares PaymentRevenueShare[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([studentId])
+  @@map("payments")
+}
+
+/// Cross-branch service exchange: a student pays at one branch (`fromBranch`) but part of
+/// the service was actually delivered by another (`toBranch`) — e.g. a course only offered
+/// there, or timing that suited that branch better. Flagged manually per payment, split
+/// decided case-by-case by whoever records it. `fromBranch` owes `toBranch` `shareAmount`
+/// until a super admin marks it settled — a real, tracked transfer, same spirit as petty
+/// cash, not just a reporting split. A payment can have more than one share row if the
+/// service was split across several branches.
+model PaymentRevenueShare {
+  id             String               @id @default(cuid())
+  companyId      String
+  paymentId      String
+  fromBranchId   String
+  toBranchId     String
+  splitPercent   Decimal?             @db.Decimal(5, 2)
+  shareAmount    Decimal              @db.Decimal(10, 2)
+  note           String?              @db.Text
+  /// The date the transferor says this transfer is *for* — what revenue reports bucket it by.
+  /// Defaults to today at creation but is backdatable, same as Payment.paidAt — deliberately
+  /// separate from `settledAt`, which is pure record-keeping (when the money actually moved)
+  /// and never used to decide which month's revenue this counts toward.
+  transferDate   DateTime             @default(now())
+  status         RevenueShareStatus   @default(PENDING)
+  recordedById   String
+  settledById    String?
+  settledAt      DateTime?
+  settlementNote String?              @db.Text
+  reviewStatus   TransferReviewStatus @default(UNREVIEWED)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  disputeNote    String?              @db.Text
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payment    Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  fromBranch Branch  @relation("RevenueShareFromBranch", fields: [fromBranchId], references: [id], onDelete: Cascade)
+  toBranch   Branch  @relation("RevenueShareToBranch", fields: [toBranchId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation("RevenueShareRecordedBy", fields: [recordedById], references: [id], onDelete: Restrict)
+  settledBy  User?   @relation("RevenueShareSettledBy", fields: [settledById], references: [id], onDelete: Restrict)
+  reviewedBy User?   @relation("RevenueShareReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([paymentId])
+  @@index([fromBranchId])
+  @@index([toBranchId])
+  @@index([status])
+  @@index([reviewStatus])
+  @@map("payment_revenue_shares")
+}
+
+/// A branch's day-to-day cash box — HQ tops it up, the branch draws it down on small
+/// expenses (stationery, refreshments, local transport, etc.). Balance is always computed
+/// live (sum of TOP_UP minus sum of EXPENSE), never stored, same reasoning as a student's
+/// balance due — a stored running total would drift the moment an entry gets corrected.
+model PettyCashEntry {
+  id           String        @id @default(cuid())
+  companyId    String
+  branchId     String
+  type         PettyCashType
+  amount       Decimal       @db.Decimal(10, 2)
+  category     String?
+  description  String?       @db.Text
+  receiptUrl   String?
+  occurredAt   DateTime      @default(now())
+  recordedById String
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch     Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+  reviewedBy User?   @relation("PettyCashEntryReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  requisition PettyCashRequisition?
+
+  @@index([companyId])
+  @@index([branchId])
+  @@map("petty_cash_entries")
+}
+
+/// A branch's request to HQ for petty cash funds: BRANCH_ADMIN raises it, SUPER_ADMIN
+/// approves or rejects it, and once approved an ACCOUNTANT (or SUPER_ADMIN) fulfills it by
+/// actually topping up the cash box — which creates the linked PettyCashEntry.
+model PettyCashRequisition {
+  id               String                     @id @default(cuid())
+  companyId        String
+  branchId         String
+  amount           Decimal                    @db.Decimal(10, 2)
+  reason           String?                    @db.Text
+  status           PettyCashRequisitionStatus @default(PENDING)
+  requestedById    String
+  decisionById     String?
+  decisionAt       DateTime?
+  decisionNotes    String?                    @db.Text
+  fulfilledById    String?
+  fulfilledAt      DateTime?
+  pettyCashEntryId String?                    @unique
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch         Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  requestedBy    User            @relation("PettyCashRequisitionRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  decisionBy     User?           @relation("PettyCashRequisitionDecisionBy", fields: [decisionById], references: [id], onDelete: Restrict)
+  fulfilledBy    User?           @relation("PettyCashRequisitionFulfilledBy", fields: [fulfilledById], references: [id], onDelete: Restrict)
+  pettyCashEntry PettyCashEntry? @relation(fields: [pettyCashEntryId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([status])
+  @@map("petty_cash_requisitions")
+}
+
+/// A Razorpay Payment Link shared with a student for a preset amount.
+/// The webhook flips status to PAID and creates the matching Payment row.
+model PaymentLink {
+  id             String            @id @default(cuid())
+  companyId      String
+  branchId       String
+  studentId      String
+  amount         Decimal           @db.Decimal(10, 2)
+  currency       String            @default("INR")
+  description    String?
+  status         PaymentLinkStatus @default(CREATED)
+  razorpayLinkId String            @unique
+  shortUrl       String
+  createdById    String
+  createdAt      DateTime          @default(now())
+  expiresAt      DateTime?
+  paidAt         DateTime?
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  payment   Payment?
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([studentId])
+  @@map("payment_links")
+}
+
+/// Immutable trail of sensitive actions (fee/discount/user changes) for accountability
+/// across many branch admins. Append-only — nothing here is ever updated or deleted.
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  branchId   String?
+  actorId    String
+  actorName  String
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  metadata   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch  Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  actor   User    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// A record that a fee reminder was sent to a student with a balance due. There's no
+/// SMS/WhatsApp gateway wired up — the WhatsApp channel opens a pre-filled chat deep
+/// link (no API key needed); staff log the follow-up here regardless of channel used.
+model FeeReminder {
+  id        String          @id @default(cuid())
+  companyId String
+  branchId  String
+  studentId String
+  channel   ReminderChannel
+  notes     String?
+  sentById  String
+  createdAt DateTime        @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sentBy  User    @relation(fields: [sentById], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([studentId])
+  @@map("fee_reminders")
+}
+
+/// A revenue goal for one branch in one calendar month — set only by super admins.
+/// Actual achievement is computed on read from Payment, never stored here.
+model BranchTarget {
+  id           String   @id @default(cuid())
+  companyId    String
+  branchId     String
+  year         Int
+  month        Int
+  targetAmount Decimal  @db.Decimal(12, 2)
+  setById      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  setBy   User    @relation(fields: [setById], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, year, month])
+  @@index([companyId])
+  @@map("branch_targets")
+}
+
+/// A person who's shown interest but hasn't enrolled yet — the funnel stage before Student.
+/// Converting a lead creates a real Student and links back here via convertedStudentId, so
+/// the lead record (source, follow-up history) survives as the enrollment's origin story.
+model Lead {
+  id                 String     @id @default(cuid())
+  companyId          String
+  branchId           String
+  name               String
+  phone              String
+  email              String?
+  source             LeadSource @default(OTHER)
+  sourceDetail       String?
+  interestedCourseId String?
+  status             LeadStatus @default(NEW)
+  followUpAt         DateTime?
+  lostReason         String?
+  notes              String?    @db.Text
+  convertedStudentId String?    @unique
+  createdById        String
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch           Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  interestedCourse Course?        @relation(fields: [interestedCourseId], references: [id], onDelete: SetNull)
+  convertedStudent Student?       @relation(fields: [convertedStudentId], references: [id], onDelete: SetNull)
+  createdBy        User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  activities       LeadActivity[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([status])
+  @@index([interestedCourseId])
+  @@map("leads")
+}
+
+/// A logged touchpoint on a lead (call made, note added) — gives staff a timeline instead
+/// of a single overwritten notes field.
+model LeadActivity {
+  id          String   @id @default(cuid())
+  leadId      String
+  note        String   @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([leadId])
+  @@map("lead_activities")
+}
